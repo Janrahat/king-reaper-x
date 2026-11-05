@@ -1,8 +1,49 @@
 name: CI
-on: [push, pull_request]
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   test:
+    name: tests (py${{ matrix.python }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.10", "3.11", "3.12"]
+
+    env:
+      # CI has a tty-less runner; make the consent gate fail fast instead of
+      # waiting for input that will never arrive.
+      REAPER_ACCEPT_TERMS: "1"
+      REAPER_NONINTERACTIVE: "1"
+      NO_COLOR: "1"
+
     steps:
       - uses: actions/checkout@v4
-      - run: python -m compileall -q core modules data dashboard tests main.py
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: No third-party dependencies to install
+        run: |
+          python -m pip install --upgrade pip
+          echo "requirements.txt declares no packages; nothing to install."
+
+      - name: Syntax check every module
+        run: python -m compileall -q core modules data dashboard tests main.py
+
+      - name: Offline unit tests
+        run: python -m unittest tests.test_offline -v
+
+      - name: Localhost integration tests
+        run: python -m unittest tests.test_smoke -v
