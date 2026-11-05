@@ -2,7 +2,7 @@
 # KING REAPER X installer for Termux (Android).
 #
 # Termux specifics this script respects:
-#   * no root, ever — everything lands under $PREFIX and $HOME
+#   * no root, ever - everything lands under $PREFIX and $HOME
 #   * python is a package, not a system binary
 #   * the framework needs no pip packages, so nothing is compiled
 set -euo pipefail
@@ -13,7 +13,7 @@ ok()   { printf '%s[+]%s %s\n' "$GRN" "$RST" "$1"; }
 warn() { printf '%s[!]%s %s\n' "$YEL" "$RST" "$1"; }
 die()  { printf '%s[x]%s %s\n' "$RED" "$RST" "$1" >&2; exit 1; }
 
-printf '%s\n' "KING REAPER X — Termux installer"
+printf '%s\n' "KING REAPER X - Termux installer"
 
 # --------------------------------------------------------------- environment
 if [ -z "${PREFIX:-}" ] || [ ! -d "${PREFIX:-/nonexistent}" ]; then
@@ -29,7 +29,7 @@ fi
 # ------------------------------------------------------------------- python
 if ! command -v python >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
     warn "python is not installed; installing it now"
-    pkg update -y || warn "pkg update failed — continuing"
+    pkg update -y || warn "pkg update failed - continuing"
     pkg install -y python || die "pkg install python failed. Run 'pkg update && pkg install python' manually."
 fi
 PY="$(command -v python3 || command -v python)"
@@ -59,15 +59,15 @@ PYCODE
 if [ -n "$BROKEN" ]; then
     warn "these standard-library modules fail to import: $BROKEN"
     warn "try: pkg reinstall python"
-    # cryptography/ssl problems are the usual cause on Termux; the framework
-    # degrades gracefully (TLS module reports a clean error) rather than lying.
+    # ssl problems are the usual cause on Termux; the framework degrades
+    # gracefully (the TLS module reports a clean error) rather than lying.
 fi
 
 # --------------------------------------------------------------- openssl (opt)
 if command -v openssl >/dev/null 2>&1; then
     ok "openssl present (TLS smoke tests enabled)"
 else
-    warn "openssl not found — TLS smoke tests will be skipped."
+    warn "openssl not found - TLS smoke tests will be skipped."
     warn "install with: pkg install -y openssl   (optional, not required to run)"
 fi
 
@@ -110,4 +110,4 @@ printf '  reaper-x                 interactive menu\n'
 printf '  reaper-x dashboard       command centre (127.0.0.1:8899)\n'
 printf '\n'
 printf 'Note: Termux cannot bind privileged ports and has no root by default.\n'
-printf 'Port scans of remote hosts need authorization — pass --authorized.\n'
+printf 'Port scans of remote hosts need authorization - pass --authorized.\n'
