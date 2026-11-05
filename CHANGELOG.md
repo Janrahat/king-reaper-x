@@ -53,3 +53,21 @@ Python 3.11; see **Verification** at the end for what was *not* run.
 - `username` - public profile existence across 20 sites with a three-state
   result (`found` / `not found` / `blocked`).
 - `threat` - reputation from public feeds plus optional keyed providers.
+
+**Packaging**
+- `scripts/install.sh` for Kali/Debian/Ubuntu - verifies Python and stdlib,
+  installs a launcher, no root and no pip.
+- `scripts/install-termux.sh` for Termux - refuses to run outside Termux, never
+  assumes root, never compiles anything.
+- `scripts/run_tests.sh` - syntax, offline, integration; non-interactive.
+- `.github/workflows/ci.yml` - 4 Python versions, CLI smoke checks, dashboard
+  routes, installer syntax, a secret-literal scan.
+
+**Tests - 102 total, all network-free**
+- `tests/test_offline.py` (65): E.164 tables, NANP resolution, phone analysis,
+  input validation, port-spec parsing, rate limiter, thread-pool error isolation,
+  envelope normalisation, SQLite round-trips, consent gates, secret storage and
+  masking, report rendering and XSS escaping, WHOIS parsing, DNS wire format.
+- `tests/test_smoke.py` (37): real HTTP/TCP/TLS servers on `127.0.0.1`, port
+  scanning (open and closed), header and cookie auditing, TLS certificate decode,
+  CLI subprocess runs, dashboard routes and the public-bind refusal.
