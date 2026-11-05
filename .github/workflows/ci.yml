@@ -79,3 +79,46 @@ jobs:
           else
             echo "the Termux guard did not fire"; exit 1
           fi
+
+  secrets:
+    name: no committed secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan for key-shaped literals
+        run: |
+          python - <<'PY'
+          import pathlib, re, sys
+
+          # Assembled from fragments so this file holds no key-shaped literal.
+          prefixes = ["sk" + "-", "gh" + "p_", "AK" + "IA"]
+          patterns = [re.escape(p) + r"[A-Za-z0-9]{16,}" for p in prefixes]
+          patterns.append("-----BEGIN " + r"(RSA|OPENSSH|EC) PRIVATE KEY")
+          combined = re.compile("|".join(patterns))
+
+          skip = {".git", "tests", "__pycache__"}
+          hits = []
+          for path in pathlib.Path(".").rglob("*"):
+              if not path.is_file() or skip & set(path.parts):
+                  continue
+              try:
+                  text = path.read_text(encoding="utf-8", errors="ignore")
+              except OSError:
+                  continue
+              for number, line in enumerate(text.splitlines(), 1):
+                  if combined.search(line):
+                      hits.append(f"{path}:{number}")
+
+          if hits:
+              print("::error::key-shaped literal found:")
+              for hit in hits:
+                  print("  " + hit)
+              sys.exit(1)
+          print("no key-shaped literals found")
+          PY
+
+      - name: .env must not be committed
+        run: |
+          if [ -f .env ]; then echo "::error::.env is committed"; exit 1; fi
+          echo ".env is not committed"
