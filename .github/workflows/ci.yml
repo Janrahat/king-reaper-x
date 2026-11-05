@@ -47,3 +47,21 @@ jobs:
 
       - name: Localhost integration tests
         run: python -m unittest tests.test_smoke -v
+
+      - name: CLI smoke checks
+        run: |
+          python main.py --version
+          python main.py --help
+          python main.py tools
+          python main.py status
+          python main.py doctor
+
+      - name: Dashboard starts and answers
+        run: |
+          python main.py dashboard --port 8901 --quiet &
+          sleep 3
+          for route in /healthz /api/system /api/history /api/stats; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8901$route")
+            echo "$route -> $code"
+            [ "$code" = "200" ] || exit 1
+          done
