@@ -20,7 +20,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 
-def _launch_console() -> int:
+def _launch_console(force_accept: bool = False) -> int:
     """Start the interactive console, honouring the terms gate."""
     from core import ui
     from core.cli import request_terms
@@ -30,7 +30,9 @@ def _launch_console() -> int:
     ui.set_color(config.get_bool("color", True))
     ui.set_animations(config.get_bool("animations", True))
 
-    refusal = request_terms(config, quiet=False)
+    # --accept-terms is normally handled by argparse, which this path bypasses,
+    # so it is honoured here too.
+    refusal = request_terms(config, force_accept=force_accept, quiet=False)
     if not refusal["accepted"]:
         print(ui.display_error("terms not accepted — exiting"))
         return 2
@@ -43,13 +45,30 @@ def _launch_console() -> int:
         return 130
 
 
+def _wants_console(argv) -> bool:
+    """True when the console should start.
+
+    A bare invocation opens it, and so does ``menu`` — but global flags may come
+    first (``--accept-terms menu``), so the check looks at the first *non-flag*
+    token rather than argv[0].
+    """
+    if not argv:
+        return True
+    for token in argv:
+        if token.startswith("-"):
+            continue
+        return token == "menu"
+    return False
+
+
 def main() -> int:
     argv = sys.argv[1:]
 
-    # A bare `python main.py` and `python main.py menu` both open the console.
-    # `--help`, `--version` and every real subcommand still go to argparse.
-    if not argv or argv[0] == "menu":
-        return _launch_console()
+    # `python main.py`, `python main.py menu` and `python main.py --accept-terms
+    # menu` all open the console. `--help`, `--version` and every real
+    # subcommand still go to argparse.
+    if _wants_console(argv):
+        return _launch_console(force_accept="--accept-terms" in argv)
 
     from core.cli import main as cli_main
 
