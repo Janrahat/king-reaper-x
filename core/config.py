@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 
 APP_NAME = "kingreaperx"
 APP_TITLE = "KING REAPER X"
-VERSION = "1.0.0"
+VERSION = "2.0.0"
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -110,8 +110,9 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "timeout": 8,
     "threads": 16,
     "rate_limit": 8.0,
-    "user_agent": "KING-REAPER-X/1.0 security-assessment",
+    "user_agent": "KING-REAPER-X/2.0 security-assessment",
     "color": True,
+    "animations": True,
     "consent_accepted": False,
     "consent_version": 1,
     "dashboard_host": "127.0.0.1",
