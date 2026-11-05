@@ -65,3 +65,17 @@ jobs:
             echo "$route -> $code"
             [ "$code" = "200" ] || exit 1
           done
+
+      - name: Installer scripts are valid shell
+        run: |
+          bash -n scripts/install.sh
+          bash -n scripts/install-termux.sh
+          bash -n scripts/run_tests.sh
+
+      - name: The Termux installer refuses to run outside Termux
+        run: |
+          if env -u PREFIX bash scripts/install-termux.sh 2>&1 | grep -q "not look like Termux"; then
+            echo "refused correctly"
+          else
+            echo "the Termux guard did not fire"; exit 1
+          fi
