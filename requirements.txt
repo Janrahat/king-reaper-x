@@ -10,8 +10,3 @@
 # faith.
 #
 # Verified with: python3 --version  ->  3.8 or newer required (3.11 recommended)
-#
-# If you want to run the optional development extras:
-#   pip install -r requirements-dev.txt
-#
-# Nothing listed there is imported by the framework itself.
