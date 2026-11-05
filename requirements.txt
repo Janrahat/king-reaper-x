@@ -1,0 +1,17 @@
+# KING REAPER X requires no third-party Python packages.
+#
+# The framework is implemented entirely against the Python standard library
+# (socket, ssl, sqlite3, http.server, urllib, ipaddress, concurrent.futures) so
+# that it installs and runs on Termux without compiling anything.
+#
+# This file is intentionally empty of dependencies. It exists so that tooling
+# which expects a requirements.txt does not fail, and so the "there is nothing
+# to install" claim is verifiable rather than something you have to take on
+# faith.
+#
+# Verified with: python3 --version  ->  3.8 or newer required (3.11 recommended)
+#
+# If you want to run the optional development extras:
+#   pip install -r requirements-dev.txt
+#
+# Nothing listed there is imported by the framework itself.
