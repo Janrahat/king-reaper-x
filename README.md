@@ -1,11 +1,26 @@
 # KING REAPER X
 
-**Ultimate Cyber Intelligence & Security Framework — v1.0.0**
+**Ultimate Cyber Intelligence & Security Framework — v2.0.0**
 
 A modular, standard-library-only Python framework for authorized security
 assessment, OSINT and threat intelligence. Runs on Kali Linux, any Debian or
 Ubuntu host, and Termux on Android — with **no pip dependencies at all**, so
 nothing is ever compiled on a phone.
+
+```
+     ██╗  ██╗██╗███╗   ██╗ ██████╗     ██████╗ ███████╗ █████╗ ██████╗ ███████╗██████╗
+     ██║ ██╔╝██║████╗  ██║██╔════╝     ██╔══██╗██╔════╝██╔══██╗██╔══██╗██╔════╝██╔══██╗
+     █████╔╝ ██║██╔██╗ ██║██║  ███╗    ██████╔╝█████╗  ███████║██████╔╝█████╗  ██████╔╝
+     ██╔═██╗ ██║██║╚██╗██║██║   ██║    ██╔══██╗██╔══╝  ██╔══██║██╔══██╗██╔══╝  ██╔══██╗
+     ██║  ██╗██║██║ ╚████║╚██████╔╝    ██║  ██║███████╗██║  ██║██║  ██║███████╗██║  ██║
+     ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝ ╚═════╝     ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+                                        ██╗  ██╗
+                                        ╚██╗██╔╝  ultimate cyber intelligence
+                                         ╚███╔╝
+                                         ██╔██╗
+                                        ██╔╝ ██╗
+                                        ╚═╝  ╚═╝
+```
 
 ---
 
@@ -89,10 +104,43 @@ reaper-x status       # runtime, database and provider state
 ## Quick start
 
 ```bash
-reaper-x                      # interactive menu
+reaper-x                      # interactive command-centre console
 reaper-x --help               # every command
 reaper-x tools                # list the 13 modules
 ```
+
+### The console (v2.0.0)
+
+`reaper-x` (or `python3 main.py menu`) opens the command-centre interface: a
+boot sequence that verifies six subsystems, a live system dashboard, and a
+16-entry menu. Every entry resolves to a real module or handler — there are no
+placeholder rows.
+
+```
+[01] Mobile Intelligence           phone · whatsapp
+[02] IP Geo Intelligence           geoip
+[03] Domain Reconnaissance         domain
+[04] SSL/TLS Security Audit        ssl
+[05] Technology Fingerprint        fingerprint
+[06] Subdomain Intelligence        subdomains
+[07] Web Security Assessment       webscan
+[08] Username/Email OSINT          username
+[09] Threat Intelligence           threat
+[10] Dependency Security Audit     deps
+[11] Authorized Port Scanner       ports ⚿
+[12] System Status                 status
+[13] Scan History                  history
+[14] Full Target Audit             audit
+[15] API Providers & Configuration config
+[16] Settings                      settings
+[00] Exit
+```
+
+`⚿` marks the entry that demands a per-run authorization confirmation.
+
+Animations are **off by default on Termux and on any non-tty**, and can be
+disabled anywhere with `REAPER_NO_ANIM=1` or `config set animations false`.
+The interface is then instant — it prints the final frame instead of animating.
 
 ### Phone intelligence
 
@@ -230,17 +278,22 @@ steps to obtain it.
 ./scripts/run_tests.sh
 ```
 
-Two suites, 102 tests, no network required:
+Three suites, 156 tests, no network required:
 
 - `tests/test_offline.py` (65) — parsing, validation, E.164 tables, DNS wire
   format, WHOIS parsing, SQLite, consent gates, secret storage, report escaping.
 - `tests/test_smoke.py` (37) — real HTTP/TCP/TLS servers on `127.0.0.1`, port
   scanning, header audit, cookie checks, TLS certificate decode, CLI run as a
   subprocess, dashboard routes.
+- `tests/test_ui.py` (54) — the v2.0.0 interface layer: palette and colour
+  gating, animation auto-disable, banner geometry, all 16 menu entries
+  resolving to real destinations, invalid input, Ctrl+C, EOF, the phone
+  sub-menu against a real number, the authorization gate, and the boot checks.
 
 ```bash
 python3 -m unittest tests.test_offline -v
 python3 -m unittest tests.test_smoke -v
+python3 -m unittest tests.test_ui -v
 ```
 
 Tests set `REAPER_NONINTERACTIVE=1` so a consent prompt can never hang CI, and
@@ -263,6 +316,8 @@ each run uses a throwaway `HOME` so your real config is untouched.
 king-reaper-x/
 ├── main.py                  # launcher (works from any cwd)
 ├── core/                    # config, net, dns, whois, db, report, cli, consent
+│   └── ui/                  # v2.0.0 interface layer (theme, banner, widgets,
+│                            #   boot, menu) — no scanning code lives here
 ├── modules/
 │   ├── mobile_intelligence/     phone_intel
 │   ├── whatsapp_intelligence/   business_profile
