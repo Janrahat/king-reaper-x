@@ -1,0 +1,254 @@
+"""KING REAPER X command line interface — parser layer.
+
+Split out of the original single-module ``core/cli.py`` so each layer can be
+read and tested on its own. ``core.cli`` re-exports every public name, so
+``from core.cli import build_parser, main`` keeps working unchanged.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
+from core import registry, report, ui
+from core.config import PROVIDERS, VERSION, Config, DB_FILE, REPORT_DIR, load_config
+from core.consent import require_authorization, require_terms, request_terms, ACTIVE_MODULES
+from core.db import open_db
+from core.errors import ReaperError
+from core.logging_setup import AuditLogger, get_logger, log_path
+from core.utils import dedupe, elapsed_ms, now_iso, parse_ports, truncate
+
+logger = get_logger("cli")
+
+SCAN_VERBS = {
+    "phone": "phone",
+    "whatsapp": "whatsapp",
+    "geoip": "geoip",
+    "location": "consented_location",
+    "username": "username",
+    "domain": "domain",
+    "subdomains": "subdomains",
+    "ssl": "ssl",
+    "ports": "ports",
+    "fingerprint": "fingerprint",
+    "webscan": "webscan",
+    "threat": "threat",
+    "deps": "deps",
+}
+
+#: flags a module needs, mapped from the CLI namespace
+MODULE_OPTION_KEYS = (
+    "authorized", "brute", "enrich", "check_contact_status", "shared_by", "ttl_hours",
+    "banner", "check_paths", "include_feeds", "online", "max_hosts", "words", "ports",
+)
+
+
+# --------------------------------------------------------------------------- #
+# argument plumbing
+# --------------------------------------------------------------------------- #
+
+
+def _common_options(parser: argparse.ArgumentParser) -> None:
+    # ``default=SUPPRESS`` is essential: without it the subparser's own default
+    # (False) overwrites the value parsed from the global ``reaper --json …``
+    # position, so `main.py --json scan` would silently print human output.
+    parser.add_argument("--json", dest="json_output", action="store_true",
+                        default=argparse.SUPPRESS,
+                        help="machine readable JSON on stdout")
+    parser.add_argument("--out", dest="out_dir", default=None,
+                        help=f"report directory (default {REPORT_DIR})")
+    parser.add_argument("--format", dest="formats", default="",
+                        help="comma list of json,md,html,print (default: none)")
+    parser.add_argument("--quiet", action="store_true", default=argparse.SUPPRESS,
+                        help="suppress progress output")
+    parser.add_argument("--timeout", type=float, default=None, help="per-request timeout in seconds")
+    parser.add_argument("--threads", type=int, default=None, help="worker threads")
+    parser.add_argument("--rate", type=float, default=None, help="requests per second limit")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="reaper",
+        description="KING REAPER X — cyber intelligence & security framework",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "examples:\n"
+            "  python main.py phone +966501234567\n"
+            "  python main.py domain example.com --json\n"
+            "  python main.py ports example.com --authorized --ports top\n"
+            "  python main.py webscan https://example.com --format html\n"
+            "  python main.py dashboard\n"
+            "  python main.py menu\n"
+        ),
+    )
+    parser.add_argument("--version", action="version", version=f"KING REAPER X {VERSION}")
+    parser.add_argument("--accept-terms", action="store_true",
+                        help="accept the authorized-use notice without prompting")
+    parser.add_argument("--json", dest="json_output", action="store_true", help="JSON output")
+    parser.add_argument("--quiet", action="store_true")
+
+    sub = parser.add_subparsers(dest="command")
+
+    # -- discovery / meta -------------------------------------------------- #
+    sub.add_parser("menu", help="interactive menu")
+    info = sub.add_parser("info", help="framework identity and capability summary")
+    info.add_argument("--json", dest="json_output", action="store_true")
+    info.add_argument("--quiet", action="store_true")
+
+    tools = sub.add_parser("tools", help="list every module")
+    tools.add_argument("--json", dest="json_output", action="store_true")
+    tools.add_argument("--quiet", action="store_true")
+
+    doctor = sub.add_parser("doctor", help="environment diagnostics")
+    doctor.add_argument("--json", dest="json_output", action="store_true")
+    doctor.add_argument("--quiet", action="store_true")
+
+    selftest = sub.add_parser("selftest", help="exercise the framework end to end")
+    selftest.add_argument("--json", dest="json_output", action="store_true")
+    selftest.add_argument("--quiet", action="store_true")
+
+    status = sub.add_parser("status", help="runtime status, database and provider state")
+    status.add_argument("--json", dest="json_output", action="store_true")
+    status.add_argument("--quiet", action="store_true")
+
+    hist = sub.add_parser("history", help="recent operations")
+    hist.add_argument("--limit", type=int, default=20)
+    hist.add_argument("--module", default=None)
+    hist.add_argument("--json", dest="json_output", action="store_true")
+    hist.add_argument("--quiet", action="store_true")
+
+    show = sub.add_parser("show", help="full stored result for one scan id")
+    show.add_argument("scan_id", type=int)
+    show.add_argument("--json", dest="json_output", action="store_true")
+    show.add_argument("--quiet", action="store_true")
+
+    # -- configuration ----------------------------------------------------- #
+    cfg = sub.add_parser("config", help="view or change configuration")
+    cfg_sub = cfg.add_subparsers(dest="config_action")
+    cfg_sub.add_parser("show", help="print current settings (secrets redacted)")
+    set_key = cfg_sub.add_parser("set-key", help="store an API key (mode 0600)")
+    set_key.add_argument("provider", choices=sorted(PROVIDERS.keys()))
+    set_key.add_argument("key", nargs="?", default=None,
+                         help="omit to read from stdin, which keeps it out of shell history")
+    clear_key = cfg_sub.add_parser("clear-key", help="remove a stored API key")
+    clear_key.add_argument("provider", choices=sorted(PROVIDERS.keys()))
+    cfg_sub.add_parser("providers", help="provider requirements and signup links")
+    set_opt = cfg_sub.add_parser("set", help="set a scalar setting")
+    set_opt.add_argument("name")
+    set_opt.add_argument("value")
+    cfg.add_argument("--json", dest="json_output", action="store_true")
+    cfg.add_argument("--quiet", action="store_true")
+
+    # -- dashboard --------------------------------------------------------- #
+    dash = sub.add_parser("dashboard", help="start the local web dashboard")
+    dash.add_argument("--host", default=None)
+    dash.add_argument("--port", type=int, default=None)
+    dash.add_argument("--allow-public", action="store_true",
+                      help="permit binding to a non-loopback interface")
+    dash.add_argument("--json", dest="json_output", action="store_true")
+    dash.add_argument("--quiet", action="store_true")
+
+    # -- scan verbs -------------------------------------------------------- #
+    scan_specs = {
+        "phone": ("international phone number", ["--enrich"]),
+        "whatsapp": ("WhatsApp business number", ["--check-contact"]),
+        "geoip": ("IP address or hostname", []),
+        "location": ("lat,lon or a JSON share payload", ["--shared-by"]),
+        "username": ("username, or an email address", []),
+        "domain": ("domain name", []),
+        "subdomains": ("domain name", ["--brute"]),
+        "ssl": ("host or host:port", []),
+        "ports": ("host or IP", ["--ports"]),
+        "fingerprint": ("host or URL", []),
+        "webscan": ("host or URL", ["--no-paths"]),
+        "threat": ("domain or IP", []),
+        "deps": ("optional path (default: project root)", []),
+    }
+    for verb, (metavar, extras) in scan_specs.items():
+        p = sub.add_parser(verb, help=f"run the {SCAN_VERBS[verb]} module")
+        p.add_argument("target", nargs="?", default="", metavar=metavar)
+        if "--enrich" in extras:
+            p.add_argument("--enrich", action="store_true",
+                           help="also query numverify when a key is configured")
+        if "--check-contact" in extras:
+            p.add_argument("--check-contact", action="store_true",
+                           help="also run the official WhatsApp contact-status lookup")
+        if "--shared-by" in extras:
+            p.add_argument("--shared-by", default="", help="name of the person who shared")
+            p.add_argument("--ttl-hours", type=int, default=24)
+            p.add_argument("--payload", default=None,
+                           help="JSON share payload emitted by `location --shared-by`")
+        if "--brute" in extras:
+            p.add_argument("--brute", action="store_true", help="also brute force (needs --authorized)")
+            p.add_argument("--words", default=None, help="path to a custom wordlist")
+            p.add_argument("--max-hosts", type=int, default=2000)
+        if "--ports" in extras:
+            p.add_argument("--ports", default="top", help="top|all|22,80|1-1024")
+            p.add_argument("--no-banner", dest="banner", action="store_false", default=True)
+        if "--no-paths" in extras:
+            p.add_argument("--no-paths", dest="check_paths", action="store_false", default=True)
+        if verb == "threat":
+            p.add_argument("--no-feeds", dest="include_feeds", action="store_false", default=True)
+        if verb == "deps":
+            p.add_argument("--offline", dest="online", action="store_false", default=True)
+        if verb in ("ports", "subdomains", "webscan"):
+            p.add_argument("--authorized", action="store_true",
+                           help="confirm you own the target or hold written permission")
+        _common_options(p)
+
+    # -- legacy aliases people type from muscle memory --------------------- #
+    audit = sub.add_parser("audit", help="run a full non-invasive assessment of one target")
+    audit.add_argument("target")
+    audit.add_argument("--authorized", action="store_true")
+    audit.add_argument("--json", dest="json_output", action="store_true")
+    audit.add_argument("--quiet", action="store_true")
+    audit.add_argument("--out", dest="out_dir", default=None)
+
+    return parser
+
+
+def _namespace(**overrides: Any) -> argparse.Namespace:
+    """A complete namespace so menu handlers never hit a missing attribute."""
+    base: Dict[str, Any] = {
+        "command": None,
+        "target": "",
+        "json_output": False,
+        "quiet": False,
+        "out_dir": None,
+        "formats": "",
+        "timeout": None,
+        "threads": None,
+        "rate": None,
+        "accept_terms": False,
+        "authorized": False,
+        "brute": False,
+        "enrich": False,
+        "check_contact_status": False,
+        "shared_by": "",
+        "ttl_hours": 24,
+        "payload": None,
+        "banner": True,
+        "check_paths": True,
+        "include_feeds": True,
+        "online": True,
+        "max_hosts": 2000,
+        "words": None,
+        "ports": "top",
+        "limit": 20,
+        "module": None,
+        "scan_id": 0,
+        "host": None,
+        "port": None,
+        "allow_public": False,
+        "config_action": None,
+        "provider": None,
+        "key": None,
+        "name": None,
+        "value": None,
+    }
+    base.update(overrides)
+    return argparse.Namespace(**base)
