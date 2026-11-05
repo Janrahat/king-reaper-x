@@ -33,3 +33,23 @@ Python 3.11; see **Verification** at the end for what was *not* run.
   either position.
 - `dashboard/server.py` - command-centre UI and 8 JSON API routes on
   `ThreadingHTTPServer`, loopback-only by default.
+
+**Modules (13)**
+- `phone` - E.164 parsing and validation, country/region identification from a
+  bundled calling-code table with NANP area-code resolution, national and
+  international formatting, line-type inference, length plausibility, optional
+  numverify enrichment.
+- `whatsapp` - public business profile through the official Cloud API only.
+- `geoip` - geolocation and ASN, with an offline private-range short-circuit.
+- `location` - HMAC-signed, expiring consented share tokens.
+- `domain` - DNS, WHOIS, mail topology (SPF/DMARC), hosting provider.
+- `subdomains` - passive (crt.sh, hackertarget) plus optional DNS brute force
+  with wildcard detection.
+- `ssl` - certificate metadata, expiry, protocol and cipher audit.
+- `ports` - TCP scan with banner grab, service naming and risk annotation.
+- `fingerprint` - server, framework, CDN and runtime detection.
+- `webscan` - security headers, cookie flags, exposed paths.
+- `deps` - local dependency and configuration hygiene audit.
+- `username` - public profile existence across 20 sites with a three-state
+  result (`found` / `not found` / `blocked`).
+- `threat` - reputation from public feeds plus optional keyed providers.
