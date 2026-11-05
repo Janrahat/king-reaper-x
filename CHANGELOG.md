@@ -71,3 +71,28 @@ Python 3.11; see **Verification** at the end for what was *not* run.
 - `tests/test_smoke.py` (37): real HTTP/TCP/TLS servers on `127.0.0.1`, port
   scanning (open and closed), header and cookie auditing, TLS certificate decode,
   CLI subprocess runs, dashboard routes and the public-bind refusal.
+
+### Fixed during development
+
+These were found by running the code, not by reading it:
+
+- **Global `--json` was silently ignored.** A subparser's `default=False`
+  overwrote the value parsed from the global position, so
+  `main.py --json phone X` printed human text. Fixed with `default=SUPPRESS`.
+- **`--ports` was ignored by the CLI.** The flag was not forwarded into the
+  module options, so `--ports 80,443` scanned the default 118-port list.
+- **`ftp://` and `ssh://` targets were coerced to `https://`.** The web module
+  now refuses any scheme it cannot speak instead of silently assessing a
+  different service.
+- **Missing `env_flag` import** in `core/consent.py` raised `NameError` on the
+  very first prompt attempt.
+- **Consent prompt hung under tmux/CI.** A real tty with no human behind it
+  blocked `input()` forever; `REAPER_NONINTERACTIVE=1` now forces the refusal
+  path.
+- **NANP territories were swallowed by `+1`.** `+1 242` (Bahamas) resolved to the
+  US; area codes are now checked before falling back.
+- **WHOIS/`doctor` module discovery returned nothing.** The loader only accepted
+  packages, not single-file modules.
+- **Provider-gated modules looked like clean successes.** They now return
+  `degraded` with the exact variable name, so an absent key can never be
+  mistaken for "no findings".
