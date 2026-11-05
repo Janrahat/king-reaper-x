@@ -46,7 +46,7 @@ def _print_findings(findings: List[Dict[str, Any]]) -> None:
             "critical": ui.BLOOD, "high": ui.BLOOD, "medium": ui.YELLOW,
             "low": ui.GREY, "info": ui.GRAPHITE,
         }.get(str(item.get("severity", "info")).lower(), ui.GREY)
-        print(f"  {ui.c(str(item.get('severity', 'info')).upper().ljust(8)}"
+        print(f"  {ui.c(str(item.get('severity', 'info')).upper().ljust(8), color)}"
               f"{item.get('title', '')}")
         detail = item.get("detail")
         if detail:
